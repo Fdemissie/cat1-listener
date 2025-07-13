@@ -1,7 +1,9 @@
+require('dotenv').config();
 const net = require('net');
 const cbor = require('cbor');
 const chalk = require('chalk'); // For colored console output
 const { program } = require('commander'); // For CLI arguments
+
 
 // Configure CLI options
 program
@@ -57,11 +59,12 @@ class MeterSimulator {
 
     console.log(chalk.blue(`\nSending ${payloadType} payload:`));
     console.log(chalk.gray('Original:'), payload);
+    console.log(chalk.green('CBOR:  '), encoded);
     console.log(chalk.gray('Base64:  '), base64Payload);
 
     return new Promise((resolve, reject) => {
-      this.client.connect(5684, '127.0.0.1', () => {
-        console.log('Connected to listener on port 5684');
+      this.client.connect(process.env.LISTEN_PORT, '127.0.0.1', () => {
+        console.log(`Connected to listener on port ${process.env.LISTEN_PORT}`);
         this.client.write(base64Payload);
         this.client.end();
         this.messageCount++;

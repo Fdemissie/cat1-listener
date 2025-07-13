@@ -1,0 +1,16 @@
+{
+  "name": "Gas Meter Simulation",
+  "devices": [
+    {
+      "deviceId": "gas-meter-001",
+      "type": "gas",
+      "autoStart": true,
+      "initialState": {
+        "batteryLevel": 88,
+        "valveOpen": true,
+        "totalVolume": 32500,
+        "pressure": 0.3
+      }
+    }
+  ]
+}

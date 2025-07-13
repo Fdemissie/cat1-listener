@@ -1,0 +1,21 @@
+{
+  "name": "Basic Valve Control Flow",
+  "devices": [
+    {
+      "deviceId": "water-meter-001",
+      "type": "water",
+      "initialState": {
+        "batteryLevel": 85,
+        "valveOpen": false
+      }
+    },
+    {
+      "deviceId": "water-meter-002",
+      "type": "gas",
+      "initialState": {
+        "batteryLevel": 92,
+        "valveOpen": true
+      }
+    }
+  ]
+}

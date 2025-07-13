@@ -1,0 +1,16 @@
+{
+  "name": "Water Meter Simulation",
+  "devices": [
+    {
+      "deviceId": "water-meter-001",
+      "type": "water",
+      "autoStart": true,
+      "initialState": {
+        "batteryLevel": 95,
+        "valveOpen": true,
+        "totalVolume": 1250,
+        "firmwareVersion": "2.1.3"
+      }
+    }
+  ]
+}

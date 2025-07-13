@@ -1,18 +1,24 @@
+require('dotenv').config();
 const net = require('net');
 const cbor = require('cbor');
 const { processMeterData } = require('./processors/meterProcessor');
 const logger = require('./utils/logger');
 
+const PORT = process.env.LISTEN_PORT || 5684;
+
 class MeterServer {
-    constructor(port = 5684) {  // Default port set here
+    constructor(port = PORT) {  // Default port set here
+        this.connectedDevices = new Map();
         this.server = net.createServer(this.handleConnection.bind(this));
         this.port = port;
         logger.info(`Server created (not yet listening) on port ${this.port}`);
     }
 
     handleConnection(socket) {
+
         let buffer = Buffer.alloc(0);
         const clientId = `${socket.remoteAddress}:${socket.remotePort}`;
+        this.connectedDevices.set(clientId, socket); // Store connection
         let isProcessing = false;
 
         logger.info(`New connection from ${clientId}`);
@@ -21,7 +27,12 @@ class MeterServer {
         socket.setTimeout(30000); // 30 seconds timeout
 
         socket.on('data', (chunk) => {
+            // if (!this.authenticateDevice(parsedData)) {
+            //     socket.destroy();
+            //     return;
+            // }
             buffer = Buffer.concat([buffer, chunk]);
+            // this.sendDownlinkIfAvailable(socket, parsed.serial_number);
         });
 
         socket.on('end', async () => {
@@ -67,10 +78,44 @@ class MeterServer {
         });
 
         socket.on('close', () => {
+            this.connectedDevices.delete(clientId);
             logger.debug(`Connection closed for ${clientId}`);
         });
     }
 
+    async sendDownlinkIfAvailable(socket, deviceId) {
+        try {
+            const downlinkMessage = await DownlinkService.checkForMessages(deviceId);
+            if (downlinkMessage) {
+                const encoded = cbor.encode(downlinkMessage);
+                socket.write(encoded);
+                logger.info(`Sent downlink to ${deviceId}`);
+            }
+        } catch (error) {
+            logger.error(`Downlink failed for ${deviceId}:`, error);
+        }
+    }
+
+    // New method to send immediate commands
+    async sendCommand(deviceId, command) {
+        const deviceSocket = this.findDeviceSocket(deviceId);
+        if (deviceSocket) {
+            const message = {
+                timestamp: new Date().toISOString(),
+                command,
+                ackRequired: true
+            };
+            deviceSocket.write(cbor.encode(message));
+            return true;
+        }
+        return false;
+    }
+    getConnectionStats() {
+        return {
+            totalConnections: this.connectedDevices.size,
+            activeDevices: Array.from(this.connectedDevices.keys())
+        };
+    }
     start() {
         return new Promise((resolve, reject) => {
             this.server.once('error', reject);
