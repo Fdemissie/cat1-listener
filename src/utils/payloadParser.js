@@ -16,7 +16,7 @@ class PayloadParser {
       if (!rawData || typeof rawData !== 'string') {
         throw new Error('Invalid payload: must be non-empty string');
       }
-
+      logger.info('Raw Payload:',rawData);
       // Step 2: Base64 decode
       const cborBuffer = this._base64ToBuffer(rawData);
       
