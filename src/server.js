@@ -1,89 +1,194 @@
 require('dotenv').config();
 const net = require('net');
-const cbor = require('cbor');
-const { processMeterData } = require('./processors/meterProcessor');
 const logger = require('./utils/logger');
 
 const PORT = process.env.LISTEN_PORT || 5684;
 
 class MeterServer {
-    constructor(port = PORT) {  // Default port set here
+    constructor(port = PORT) {
         this.connectedDevices = new Map();
         this.server = net.createServer(this.handleConnection.bind(this));
         this.port = port;
-        logger.info(`Server created (not yet listening) on port ${this.port}`);
+        this.messageDelimiter = '\n'; // Change this to your protocol's delimiter
+        this.gatewayProcessors = require('./gatewayProcessors');
+        logger.info(`Server initialized to listen on port ${this.port}`);
+        
     }
 
     handleConnection(socket) {
-
-        let buffer = Buffer.alloc(0);
         const clientId = `${socket.remoteAddress}:${socket.remotePort}`;
-        this.connectedDevices.set(clientId, socket); // Store connection
+        let buffer = Buffer.alloc(0);
         let isProcessing = false;
 
+        // Store connection
+        this.connectedDevices.set(clientId, socket);
         logger.info(`New connection from ${clientId}`);
 
-        // Set timeout for slow clients
+        // Configure socket
         socket.setTimeout(30000); // 30 seconds timeout
+        socket.setKeepAlive(true, 60000); // Enable keep-alive
 
-        socket.on('data', (chunk) => {
-            // if (!this.authenticateDevice(parsedData)) {
-            //     socket.destroy();
-            //     return;
-            // }
-            buffer = Buffer.concat([buffer, chunk]);
-            // this.sendDownlinkIfAvailable(socket, parsed.serial_number);
-        });
-
-        socket.on('end', async () => {
-            if (buffer.length === 0) {
-                logger.warn(`Empty payload from ${clientId}`);
-                return;
-            }
-
-            isProcessing = true;
+        // Data handler - processes data immediately
+        socket.on('data', async (chunk) => {
             try {
-                const rawData = buffer.toString('utf8').trim();
-                logger.debug(`Processing data from ${clientId} (${buffer.length} bytes)`);
+                // Reset timeout timer on data received
+                socket.setTimeout(30000);
 
-                await processMeterData(rawData, { clientId });
-                logger.info(`Completed processing for ${clientId}`);
+                // Append new data to buffer
+                buffer = Buffer.concat([buffer, chunk]);
+                logger.debug(`Received ${chunk.length} bytes from ${clientId}`);
+
+                // Process complete messages (delimited by this.messageDelimiter)
+                let delimiterIndex;
+                while ((delimiterIndex = buffer.indexOf(this.messageDelimiter)) !== -1) {
+                    const message = buffer.slice(0, delimiterIndex);
+                    buffer = buffer.slice(delimiterIndex + Buffer.from(this.messageDelimiter).length);
+
+                    if (message.length > 0) {
+                        isProcessing = true;
+                        try {
+                            const rawData = message.toString('utf8').trim();
+                            logger.info(`Processing raw data from ${clientId}:`, { rawData });
+
+                            // Process the message
+                            await this.processMeterData(rawData, clientId);
+                        } finally {
+                            isProcessing = false;
+                        }
+                    }
+                }
             } catch (error) {
-                logger.error(`Processing failed for ${clientId}:`, {
+                logger.error(`Data handling error for ${clientId}:`, {
                     error: error.message,
-                    stack: error.stack
+                    stack: error.stack,
+                    bufferDump: buffer.toString('hex')
                 });
-            } finally {
-                isProcessing = false;
             }
         });
 
+        // End handler (client disconnects gracefully)
+        socket.on('end', () => {
+            logger.info(`Client ${clientId} disconnected gracefully`);
+            this.cleanupConnection(clientId);
+        });
+
+        // Timeout handler
         socket.on('timeout', () => {
             if (!isProcessing) {
                 logger.warn(`Connection timeout for ${clientId}`);
-                socket.destroy();
+                socket.end(); // Graceful disconnect
             }
         });
 
+        // Error handler
         socket.on('error', (error) => {
-            // Ignore ECONNRESET errors (common when client disconnects abruptly)
-            if (error.code !== 'ECONNRESET') {
-                logger.error(`Socket error with ${clientId}:`, {
-                    code: error.code,
-                    message: error.message
-                });
-            } else {
-                logger.debug(`Client ${clientId} disconnected abruptly`);
-            }
+            logger.error(`Socket error for ${clientId}:`, {
+                error: error.message,
+                code: error.code,
+                stack: error.stack
+            });
+            this.cleanupConnection(clientId);
         });
 
+        // Close handler
         socket.on('close', () => {
-            this.connectedDevices.delete(clientId);
             logger.debug(`Connection closed for ${clientId}`);
+            this.cleanupConnection(clientId);
         });
     }
 
-    async sendDownlinkIfAvailable(socket, deviceId) {
+    async processData(rawData, clientId) {
+        try {
+            logger.debug(`Raw data from ${clientId}: ${rawData}`);
+            
+            // Get appropriate processor
+            const processor = this.gatewayProcessors.getProcessor(rawData);
+            
+            if (!processor) {
+                logger.error(`No processor found for data from ${clientId}`);
+                return;
+            }
+
+            // Validate and parse
+            if (!processor.validate(rawData)) {
+                logger.warn(`Invalid data format from ${clientId}`);
+                return;
+            }
+
+            const parsedData = processor.parse(rawData);
+            
+            // Standardized data structure
+            const processedPacket = {
+                gatewayId: parsedData.metadata.gatewayId,
+                deviceType: parsedData.metadata.deviceType,
+                timestamp: parsedData.metadata.timestamp,
+                measurements: parsedData.measurements,
+                raw: parsedData.raw,
+                clientInfo: {
+                    ip: clientId.split(':')[1],
+                    port: clientId.split(':')[2]
+                }
+            };
+
+            logger.info('Processed data:', processedPacket);
+            
+            // Send to your data pipeline
+            await this.sendToPipeline(processedPacket);
+            
+        } catch (error) {
+            logger.error(`Processing failed for ${clientId}:`, {
+                error: error.message,
+                rawData: rawData
+            });
+        }
+    }
+
+    async sendToPipeline(data) {
+        // Implement your actual data pipeline integration here
+        // This could be database storage, message queue, etc.
+        console.log('Sending to pipeline:', JSON.stringify(data, null, 2));
+    }
+
+    cleanupConnection(clientId) {
+        const socket = this.connectedDevices.get(clientId);
+        if (socket) {
+            try {
+                if (!socket.destroyed) {
+                    socket.destroy();
+                }
+            } catch (error) {
+                logger.error(`Error cleaning up connection ${clientId}:`, error);
+            }
+            this.connectedDevices.delete(clientId);
+        }
+    }
+
+    start() {
+        return new Promise((resolve, reject) => {
+            this.server.once('error', reject);
+
+            this.server.listen(this.port, () => {
+                this.server.removeListener('error', reject);
+                logger.info(`Server listening on port ${this.port}`);
+                resolve(this.port);
+            });
+        });
+    }
+
+    stop() {
+        return new Promise((resolve) => {
+            // Clean up all connections
+            this.connectedDevices.forEach((socket, clientId) => {
+                this.cleanupConnection(clientId);
+            });
+
+            this.server.close(() => {
+                logger.info('Server stopped');
+                resolve();
+            });
+        });
+    }
+	async sendDownlinkIfAvailable(socket, deviceId) {
         try {
             const downlinkMessage = await DownlinkService.checkForMessages(deviceId);
             if (downlinkMessage) {
@@ -109,32 +214,6 @@ class MeterServer {
             return true;
         }
         return false;
-    }
-    getConnectionStats() {
-        return {
-            totalConnections: this.connectedDevices.size,
-            activeDevices: Array.from(this.connectedDevices.keys())
-        };
-    }
-    start() {
-        return new Promise((resolve, reject) => {
-            this.server.once('error', reject);
-
-            this.server.listen(this.port, () => {
-                this.server.removeListener('error', reject);
-                logger.info(`Meter server now listening on port ${this.port}`);
-                resolve(this.port);
-            });
-        });
-    }
-
-    stop() {
-        return new Promise((resolve) => {
-            this.server.close(() => {
-                logger.info(`Server stopped`);
-                resolve();
-            });
-        });
     }
 }
 
