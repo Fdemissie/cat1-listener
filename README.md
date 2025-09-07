@@ -42,7 +42,7 @@ cat1-listener/
 ---
 
 ## 🔧 Setup Instructions
-## Option 1(easy Option)
+## Option 1(the easy way)
 ### 1. Clone the repository
 ```bash
 git clone https://github.com/fdemissie/cat1-listener.git
