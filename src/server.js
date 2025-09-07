@@ -51,7 +51,7 @@ class MeterServer {
                             logger.info(`Processing raw data from ${clientId}:`, { rawData });
 
                             // Process the message
-                            await this.processMeterData(rawData, clientId);
+                            await this.processData(rawData, clientId);
                         } finally {
                             isProcessing = false;
                         }
