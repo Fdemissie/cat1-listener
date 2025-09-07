@@ -65,7 +65,8 @@ class MeterSimulator {
     return new Promise((resolve, reject) => {
       this.client.connect(process.env.LISTEN_PORT, '127.0.0.1', () => {
         console.log(`Connected to listener on port ${process.env.LISTEN_PORT}`);
-        this.client.write(base64Payload);
+        this.client.write("GW_ID:19661389,TYPE:T&H,ID:112500235,STAT:01000011,T:20.7��,H:68.7%,ST:5M,V:3.66v,SN:173,RSSI:-59dBm,E:114.0552,N:22.3817,Time:2025-07-30 19:15:36,T_RSSI:-55dB"
+ + '\n');
         this.client.end();
         this.messageCount++;
         console.log(chalk.green(`Sent payload ${this.messageCount}/${options.count}`));
