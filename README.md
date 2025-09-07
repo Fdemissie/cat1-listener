@@ -7,7 +7,7 @@ This is a production-ready TCP server designed to receive Base64-encoded CBOR pa
 ## 🚀 Features
 
 * TCP socket listener (default port: `5684`)
-* Base64 decoding and CBOR parsing
+* String, Base64 decoding and CBOR parsing
 * Structured data extraction
 * MySQL storage with connection pool
 * Scalable project structure with PM2 support
@@ -15,7 +15,7 @@ This is a production-ready TCP server designed to receive Base64-encoded CBOR pa
 
 ---
 
-## 📦 Folder Structure
+## 📦 Folder Structure(in progress)
 
 ```
 cat1-listener/
@@ -42,7 +42,24 @@ cat1-listener/
 ---
 
 ## 🔧 Setup Instructions
+## Option 1(easy Option)
+### 1. Clone the repository
+```bash
+git clone https://github.com/fdemissie/cat1-listener.git
+cd cat1-listener
+```
+### 2. Run deploy-cat1-listener.sh
+```bash
+sudo ./deploy-cat1-listener.sh
+```
+You should see this when deployment is finished
+<img width="591" height="292" alt="image" src="https://github.com/user-attachments/assets/3906e6ab-4ff6-4003-91b8-4f8680fffaf8" />
 
+### 3. Run pm2 status
+<img width="641" height="94" alt="image" src="https://github.com/user-attachments/assets/113ed7d1-54cd-479b-9864-542dda3cb1b0" />
+
+
+## Option 2( do it all manually)
 ### 1. Clone the repository
 
 ```bash
