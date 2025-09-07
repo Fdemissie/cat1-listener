@@ -53,6 +53,7 @@ cd cat1-listener
 sudo ./deploy-cat1-listener.sh
 ```
 You should see this when deployment is finished
+
 <img width="591" height="292" alt="image" src="https://github.com/user-attachments/assets/3906e6ab-4ff6-4003-91b8-4f8680fffaf8" />
 
 ### 3. Run pm2 status
